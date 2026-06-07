@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
 
@@ -13,7 +12,16 @@ from app.models.verses import Verse
 BASE_URL = "https://alkitab.sabda.org/api/passage.php"
 
 
-async def scrape_chapter(db: Session, book_abbr: str, chapter: int) -> Chapter:
+async def fetch_chapter_xml(book_name: str, chapter: int) -> tuple[str, ET.Element]:
+    passage = f"{book_name.lower()} {chapter}"
+    url = f"{BASE_URL}?passage={quote(passage)}"
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+    return url, ET.fromstring(resp.text)
+
+
+def save_chapter(db: Session, book_abbr: str, chapter: int, url: str, root: ET.Element) -> Chapter:
     book = db.query(Book).filter(Book.abbr == book_abbr).first()
     if not book:
         raise ValueError(f"Book '{book_abbr}' not found")
@@ -23,15 +31,6 @@ async def scrape_chapter(db: Session, book_abbr: str, chapter: int) -> Chapter:
     db.flush()
 
     try:
-        passage = f"{book.name.lower()} {chapter}"
-        url = f"{BASE_URL}?passage={quote(passage)}"
-
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-
-        root = ET.fromstring(resp.text)
-
         existing = db.query(Chapter).filter(
             Chapter.book_id == book.id,
             Chapter.chapter_no == chapter,
@@ -83,3 +82,11 @@ async def scrape_chapter(db: Session, book_abbr: str, chapter: int) -> Chapter:
         db.add(failed_job)
         db.commit()
         raise
+
+
+async def scrape_chapter(db: Session, book_abbr: str, chapter: int) -> Chapter:
+    book = db.query(Book).filter(Book.abbr == book_abbr).first()
+    if not book:
+        raise ValueError(f"Book '{book_abbr}' not found")
+    url, root = await fetch_chapter_xml(book.name, chapter)
+    return save_chapter(db, book_abbr, chapter, url, root)
