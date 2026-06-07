@@ -11,5 +11,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./app.db"
     CORS_ORIGINS: list[str] = ["*"]
 
+    LLM_BASE_URL: str = "http://168.110.205.75:20128/v1"
+    LLM_API_KEY: str = ""
+    LLM_MODEL: str = "BLIP-Text"
+
 
 settings = Settings()

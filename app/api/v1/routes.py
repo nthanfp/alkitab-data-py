@@ -12,7 +12,9 @@ from app.schemas.verses import VerseList, VerseRead
 from app.schemas.scrape import ScrapeChapterRequest, ScrapeResponse
 from app.schemas.scrape_jobs import ScrapeJobList
 from app.schemas.search import VerseSearchResult, VerseSearchResults
+from app.schemas.verse_resolve import ResolveVerseRequest, ResolveVerseResponse
 from app.services.scraper import scrape_chapter
+from app.services.verse_resolver import resolve_verse
 
 router = APIRouter()
 
@@ -137,3 +139,9 @@ async def scrape_all_book_chapters(book_id: int, db: Session = Depends(get_db)):
         status="ok",
         message=f"Scraped {book.name} ({scraped}/{book.chapter_count} chapters)",
     )
+
+
+@router.post("/resolve-verse", response_model=ResolveVerseResponse)
+async def resolve(req: ResolveVerseRequest, db: Session = Depends(get_db)):
+    results = await resolve_verse(req.text, db)
+    return ResolveVerseResponse(query=req.text, results=results)
