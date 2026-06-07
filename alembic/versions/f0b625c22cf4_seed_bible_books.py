@@ -1,6 +1,20 @@
-from sqlalchemy.orm import Session
+"""seed bible books
 
-from app.models.books import Book
+Revision ID: f0b625c22cf4
+Revises: febcc6f7ff4b
+Create Date: 2026-06-07 20:40:00.000000
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+revision: str = 'f0b625c22cf4'
+down_revision: Union[str, Sequence[str], None] = 'febcc6f7ff4b'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
 
 BOOKS_DATA = [
     (1, "Kej", "Kejadian", 50),
@@ -72,18 +86,29 @@ BOOKS_DATA = [
 ]
 
 
-def seed_books(db: Session) -> int:
-    existing = db.query(Book).count()
-    if existing > 0:
-        return 0
+def upgrade() -> None:
+    books = sa.table(
+        'books',
+        sa.column('id', sa.Integer),
+        sa.column('abbr', sa.String),
+        sa.column('name', sa.String),
+        sa.column('chapter_count', sa.Integer),
+        sa.column('order_no', sa.Integer),
+    )
+    op.bulk_insert(
+        books,
+        [
+            {
+                'id': order_no,
+                'abbr': abbr,
+                'name': name,
+                'chapter_count': chapter_count,
+                'order_no': order_no,
+            }
+            for order_no, abbr, name, chapter_count in BOOKS_DATA
+        ],
+    )
 
-    for order_no, abbr, name, chapter_count in BOOKS_DATA:
-        db.add(Book(
-            abbr=abbr,
-            name=name,
-            chapter_count=chapter_count,
-            order_no=order_no,
-        ))
 
-    db.commit()
-    return len(BOOKS_DATA)
+def downgrade() -> None:
+    op.execute('DELETE FROM books')

@@ -5,22 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.routes import router as v1_router
 from app.core.config import settings
-from app.db.session import engine, SessionLocal
-from app.models import Base
-from app.services.seed import seed_books
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    try:
-        count = seed_books(db)
-        if count > 0:
-            print(f"Seeded {count} books")
-    finally:
-        db.close()
     yield
+
 
 
 app = FastAPI(

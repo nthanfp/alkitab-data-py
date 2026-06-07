@@ -5,10 +5,13 @@ from app.db.session import get_db
 from app.models.books import Book
 from app.models.chapters import Chapter
 from app.models.verses import Verse
+from app.models.scrape_jobs import ScrapeJob
 from app.schemas.books import BookList, BookRead
 from app.schemas.chapters import ChapterList, ChapterRead
 from app.schemas.verses import VerseList, VerseRead
 from app.schemas.scrape import ScrapeChapterRequest, ScrapeResponse
+from app.schemas.scrape_jobs import ScrapeJobList
+from app.schemas.search import VerseSearchResult, VerseSearchResults
 from app.services.scraper import scrape_chapter
 
 router = APIRouter()
@@ -17,6 +20,56 @@ router = APIRouter()
 @router.get("/ping")
 async def ping():
     return {"message": "pong"}
+
+
+@router.get("/search/books")
+async def search_books(q: str = "", db: Session = Depends(get_db)):
+    if not q:
+        return {"data": []}
+    qs = f"%{q}%"
+    books = (
+        db.query(Book)
+        .filter(Book.name.ilike(qs) | Book.abbr.ilike(qs))
+        .order_by(Book.order_no)
+        .all()
+    )
+    return {"data": books, "total": len(books), "query": q}
+
+
+@router.get("/search/verses", response_model=VerseSearchResults)
+async def search_verses(q: str = "", limit: int = 50, db: Session = Depends(get_db)):
+    if not q:
+        return VerseSearchResults(data=[], total=0, query=q)
+    qs = f"%{q}%"
+    results = (
+        db.query(Verse, Chapter, Book)
+        .select_from(Verse)
+        .join(Chapter, Verse.chapter_id == Chapter.id)
+        .join(Book, Chapter.book_id == Book.id)
+        .filter(Verse.text.ilike(qs))
+        .order_by(Book.order_no, Chapter.chapter_no, Verse.verse_no)
+        .limit(limit)
+        .all()
+    )
+    data = [
+        VerseSearchResult(
+            id=v.id,
+            verse_no=v.verse_no,
+            text=v.text,
+            book_id=b.id,
+            book_abbr=b.abbr,
+            book_name=b.name,
+            chapter_no=ch.chapter_no,
+        )
+        for v, ch, b in results
+    ]
+    return VerseSearchResults(data=data, total=len(data), query=q)
+
+
+@router.get("/scrape-jobs", response_model=ScrapeJobList)
+async def list_scrape_jobs(db: Session = Depends(get_db)):
+    jobs = db.query(ScrapeJob).order_by(ScrapeJob.created_at.desc()).all()
+    return ScrapeJobList(data=jobs)
 
 
 @router.get("/books", response_model=BookList)
