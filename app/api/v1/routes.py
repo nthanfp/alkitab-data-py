@@ -19,13 +19,15 @@ from app.services.verse_resolver import resolve_verse
 router = APIRouter()
 
 
-@router.get("/ping")
+@router.get("/ping", tags=["Health"])
 async def ping():
+    """Health check endpoint."""
     return {"message": "pong"}
 
 
-@router.get("/search/books")
+@router.get("/search/books", tags=["Search"], summary="Cari kitab Alkitab")
 async def search_books(q: str = "", db: Session = Depends(get_db)):
+    """Cari kitab berdasarkan nama atau singkatan."""
     if not q:
         return {"data": []}
     qs = f"%{q}%"
@@ -38,8 +40,9 @@ async def search_books(q: str = "", db: Session = Depends(get_db)):
     return {"data": books, "total": len(books), "query": q}
 
 
-@router.get("/search/verses", response_model=VerseSearchResults)
+@router.get("/search/verses", response_model=VerseSearchResults, tags=["Search"], summary="Cari ayat Alkitab")
 async def search_verses(q: str = "", limit: int = 50, db: Session = Depends(get_db)):
+    """Cari ayat berdasarkan teks (partial match)."""
     if not q:
         return VerseSearchResults(data=[], total=0, query=q)
     qs = f"%{q}%"
@@ -68,28 +71,32 @@ async def search_verses(q: str = "", limit: int = 50, db: Session = Depends(get_
     return VerseSearchResults(data=data, total=len(data), query=q)
 
 
-@router.get("/scrape-jobs", response_model=ScrapeJobList)
+@router.get("/scrape-jobs", response_model=ScrapeJobList, tags=["Scrape"], summary="Riwayat scrape")
 async def list_scrape_jobs(db: Session = Depends(get_db)):
+    """Lihat riwayat scraping job."""
     jobs = db.query(ScrapeJob).order_by(ScrapeJob.created_at.desc()).all()
     return ScrapeJobList(data=jobs)
 
 
-@router.get("/books", response_model=BookList)
+@router.get("/books", response_model=BookList, tags=["Books"], summary="Daftar kitab")
 async def list_books(db: Session = Depends(get_db)):
+    """Daftar semua 66 kitab Alkitab."""
     books = db.query(Book).order_by(Book.order_no).all()
     return BookList(data=books)
 
 
-@router.get("/books/{book_id}", response_model=BookRead)
+@router.get("/books/{book_id}", response_model=BookRead, tags=["Books"], summary="Detail kitab")
 async def get_book(book_id: int, db: Session = Depends(get_db)):
+    """Detail kitab berdasarkan ID."""
     book = db.query(Book).filter(Book.id == book_id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
     return book
 
 
-@router.get("/books/{book_id}/chapters", response_model=ChapterList)
+@router.get("/books/{book_id}/chapters", response_model=ChapterList, tags=["Books"], summary="Daftar pasal")
 async def list_book_chapters(book_id: int, db: Session = Depends(get_db)):
+    """Daftar semua pasal dalam kitab."""
     book = db.query(Book).filter(Book.id == book_id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -97,8 +104,9 @@ async def list_book_chapters(book_id: int, db: Session = Depends(get_db)):
     return ChapterList(data=chapters)
 
 
-@router.get("/chapters/{chapter_id}/verses", response_model=VerseList)
+@router.get("/chapters/{chapter_id}/verses", response_model=VerseList, tags=["Chapters"], summary="Daftar ayat")
 async def list_chapter_verses(chapter_id: int, db: Session = Depends(get_db)):
+    """Daftar semua ayat dalam pasal."""
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
@@ -106,8 +114,9 @@ async def list_chapter_verses(chapter_id: int, db: Session = Depends(get_db)):
     return VerseList(data=verses)
 
 
-@router.post("/scrape/chapter", response_model=ScrapeResponse)
+@router.post("/scrape/chapter", response_model=ScrapeResponse, tags=["Scrape"], summary="Scrape 1 pasal")
 async def scrape_single_chapter(req: ScrapeChapterRequest, db: Session = Depends(get_db)):
+    """Scrape 1 pasal dari alkitab.sabda.org."""
     try:
         chapter_obj = await scrape_chapter(db, req.book_abbr, req.chapter)
         return ScrapeResponse(
@@ -121,8 +130,9 @@ async def scrape_single_chapter(req: ScrapeChapterRequest, db: Session = Depends
         raise HTTPException(status_code=500, detail=f"Scrape failed: {e}")
 
 
-@router.post("/scrape/book/{book_id}", response_model=ScrapeResponse)
+@router.post("/scrape/book/{book_id}", response_model=ScrapeResponse, tags=["Scrape"], summary="Scrape seluruh pasal")
 async def scrape_all_book_chapters(book_id: int, db: Session = Depends(get_db)):
+    """Scrape semua pasal dalam kitab."""
     book = db.query(Book).filter(Book.id == book_id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -141,7 +151,13 @@ async def scrape_all_book_chapters(book_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/resolve-verse", response_model=ResolveVerseResponse)
+@router.post("/resolve-verse", response_model=ResolveVerseResponse, tags=["Resolve"], summary="Resolve referensi ayat")
 async def resolve(req: ResolveVerseRequest, db: Session = Depends(get_db)):
+    """Resolve teks ayat ke referensi Alkitab (book, chapter, verse) menggunakan LLM BLIP-Text.
+
+    Contoh input:
+    - "Yesaya 54:10"
+    - "Sebab biarpun gunung-gunung beranjak... Yesaya 54:10"
+    """
     results = await resolve_verse(req.text, db)
     return ResolveVerseResponse(query=req.text, results=results)

@@ -18,6 +18,16 @@ app = FastAPI(
     version=settings.VERSION,
     openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
     lifespan=lifespan,
+    description="Alkitab Data API: Scraping, searching, and resolving Bible verses using LLM.",
+    summary="API untuk scraping Alkitab dari Sabda.org, searching ayat, dan resolving referensi menggunakan BLIP-Text LLM.",
+    contact={
+        "name": "Alkitab Data API",
+        "url": "https://github.com/anomalyco/alkitab-data-py",
+    },
+    license_info={
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT",
+    },
 )
 
 app.add_middleware(
