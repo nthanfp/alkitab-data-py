@@ -75,20 +75,12 @@ async def generate_verse_image(db: Session, book: str, chapter: int, verse: int,
     except (FileNotFoundError, OSError):
         regular_font = ImageFont.load_default()
     
-    # Draw title
+    # Hitung title dimensi
     bbox = draw.textbbox((0, 0), title, font=bold_font)
     title_w = bbox[2] - bbox[0]
     title_h = bbox[3] - bbox[1]
     
-    x_title = img.width // 2 - title_w // 2
-    y_title = (img.height - 400) // 2
-    
-    draw.text((x_title, y_title), title, fill="black", font=bold_font)
-    
-    underline_y = y_title + title_h + 15
-    draw.line([(x_title, underline_y), (x_title + title_w, underline_y)], fill="black", width=4)
-    
-    # Draw verse text (multi-line)
+    # Hitung verse lines
     max_width = 610
     words = verse_text.replace("\n", " \n ").split()
     lines = []
@@ -110,7 +102,21 @@ async def generate_verse_image(db: Session, book: str, chapter: int, verse: int,
     
     line_spacing = regular_font.getbbox("A")[3] - regular_font.getbbox("A")[1] + 20
     
-    y_verse = y_title + title_h + 60
+    # Hitung total height
+    title_box_h = title_h + 15 + 4 + 10
+    verse_lines_h = len(lines) * line_spacing
+    total_h = title_box_h + verse_lines_h
+    
+    # Vertical center
+    y_title = (img.height - total_h) // 2
+    x_title = img.width // 2 - title_w // 2
+    underline_y = y_title + title_h + 15
+    
+    # Draw
+    draw.text((x_title, y_title), title, fill="black", font=bold_font)
+    draw.line([(x_title, underline_y), (x_title + title_w, underline_y)], fill="black", width=4)
+    
+    y_verse = underline_y + 10 + 20
     for line in lines:
         lw = draw.textbbox((0, 0), line, font=regular_font)[2]
         x_verse = img.width // 2 - lw // 2
