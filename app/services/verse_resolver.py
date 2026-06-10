@@ -14,22 +14,38 @@ async def resolve_verse(text: str, db: Session) -> list[dict]:
         book_name = ref.get("book", "")
         chapter_no = ref.get("chapter")
         verse_no = ref.get("verse")
+        end_verse = ref.get("end_verse")
 
         if not book_name or chapter_no is None or verse_no is None:
             continue
 
-        row = (
-            db.query(Verse, Chapter, Book)
-            .select_from(Verse)
-            .join(Chapter, Verse.chapter_id == Chapter.id)
-            .join(Book, Chapter.book_id == Book.id)
-            .filter(
-                Book.name.ilike(book_name),
-                Chapter.chapter_no == chapter_no,
-                Verse.verse_no == verse_no,
+        if end_verse and end_verse > verse_no:
+            # Range ayat - ambil dari ayat pertama
+            row = (
+                db.query(Verse, Chapter, Book)
+                .select_from(Verse)
+                .join(Chapter, Verse.chapter_id == Chapter.id)
+                .join(Book, Chapter.book_id == Book.id)
+                .filter(
+                    Book.name.ilike(book_name),
+                    Chapter.chapter_no == chapter_no,
+                    Verse.verse_no == verse_no,
+                )
+                .first()
             )
-            .first()
-        )
+        else:
+            row = (
+                db.query(Verse, Chapter, Book)
+                .select_from(Verse)
+                .join(Chapter, Verse.chapter_id == Chapter.id)
+                .join(Book, Chapter.book_id == Book.id)
+                .filter(
+                    Book.name.ilike(book_name),
+                    Chapter.chapter_no == chapter_no,
+                    Verse.verse_no == verse_no,
+                )
+                .first()
+            )
 
         if row:
             v, ch, b = row
@@ -39,6 +55,7 @@ async def resolve_verse(text: str, db: Session) -> list[dict]:
                 "book_name": b.name,
                 "chapter": ch.chapter_no,
                 "verse": v.verse_no,
+                "end_verse": end_verse if end_verse and end_verse > verse_no else None,
                 "text": v.text,
             })
 

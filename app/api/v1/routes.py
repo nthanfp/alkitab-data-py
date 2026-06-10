@@ -190,7 +190,8 @@ async def generate_verse_image_from_text(req: GenerateImageRequest, db: Session 
     """Resolve verse text and generate image in one endpoint.
     
     Example:
-    - text: "Yohanes 3:16 - Karena begitu besar kasih Allah..."
+    - text: "Yohanes 3:16"
+    - text: "Yohanes 8:31-32"
     """
     import hashlib
     
@@ -203,15 +204,25 @@ async def generate_verse_image_from_text(req: GenerateImageRequest, db: Session 
         book_name = first_result["book_name"]
         chapter = first_result["chapter"]
         verse = first_result["verse"]
+        end_verse = first_result.get("end_verse")
         
         text_hash = hashlib.md5(req.text.encode()).hexdigest()[:8]
         output_path = f"output/verse_{text_hash}.png"
         
-        img_path = await generate_verse_image(db, book_name, chapter, verse, output_path)
+        img_path = await generate_verse_image(
+            db, 
+            book_name, 
+            chapter, 
+            verse, 
+            end_verse=end_verse,
+            output_path=output_path
+        )
+        
+        verse_ref = f"{book_name} {chapter}:{verse}" + (f"-{end_verse}" if end_verse and end_verse > verse else "")
         
         return GenerateImageResponse(
             status="ok",
-            verse_reference=f"{book_name} {chapter}:{verse}",
+            verse_reference=verse_ref,
             book=book_name,
             chapter=chapter,
             verse=verse,

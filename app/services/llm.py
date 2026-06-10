@@ -8,11 +8,13 @@ SYSTEM_PROMPT = """Kamu adalah ahli Alkitab. Kamu menerima teks ayat Alkitab dar
 Tugasmu: identifikasi referensi Alkitab dari teks tersebut.
 
 Kembalikan JSON dengan format:
-{"references": [{"book": "nama kitab", "chapter": angka, "verse": angka}]}
+{"references": [{"book": "nama kitab", "chapter": angka, "verse": angka, "end_verse": angka}]}
 
 Aturan:
 - Kembalikan maksimal 3 referensi, urutkan dari yang paling cocok.
 - Gunakan nama kitab lengkap dalam Bahasa Indonesia (contoh: "Yesaya", "Mazmur", "Roma").
+- Jika ada range ayat (contoh: "31-32"), gunakan "verse" untuk ayat pertama dan "end_verse" untuk ayat terakhir.
+- Jika hanya 1 ayat, "end_verse" boleh dihilangkan atau sama dengan "verse".
 - Jika tidak bisa mengidentifikasi, kembalikan {"references": []}.
 - JANGAN penjelasan tambahan, hanya JSON murni.
 """

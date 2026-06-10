@@ -7,8 +7,17 @@ from app.models.chapters import Chapter
 from app.models.verses import Verse
 
 
-async def generate_verse_image(db: Session, book: str, chapter: int, verse: int, output_path: str) -> str:
-    """Generate verse image with title and verse text overlay."""
+async def generate_verse_image(db: Session, book: str, chapter: int, verse: int, end_verse: int | None = None, output_path: str = "output/verse.png") -> str:
+    """Generate verse image with title and verse text overlay.
+    
+    Args:
+        db: Database session
+        book: Book name (Indonesian)
+        chapter: Chapter number
+        verse: Start verse number
+        end_verse: End verse number (optional, for range)
+        output_path: Output image path
+    """
     
     book_obj = db.query(Book).filter(Book.name.ilike(book)).first()
     if not book_obj:
@@ -21,12 +30,26 @@ async def generate_verse_image(db: Session, book: str, chapter: int, verse: int,
     if not chapter_obj:
         raise ValueError(f"Chapter {chapter} not found in {book}")
     
-    verse_obj = db.query(Verse).filter(
-        Verse.chapter_id == chapter_obj.id,
-        Verse.verse_no == verse
-    ).first()
-    if not verse_obj:
-        raise ValueError(f"Verse {verse} not found in {book} {chapter}")
+    # Ambil range ayat
+    if end_verse and end_verse > verse:
+        verse_objs = db.query(Verse).filter(
+            Verse.chapter_id == chapter_obj.id,
+            Verse.verse_no >= verse,
+            Verse.verse_no <= end_verse
+        ).order_by(Verse.verse_no).all()
+        title = f"{book_obj.name} {chapter}:{verse}-{end_verse}"
+    else:
+        verse_obj = db.query(Verse).filter(
+            Verse.chapter_id == chapter_obj.id,
+            Verse.verse_no == verse
+        ).first()
+        if not verse_obj:
+            raise ValueError(f"Verse {verse} not found in {book} {chapter}")
+        verse_objs = [verse_obj]
+        title = f"{book_obj.name} {chapter}:{verse}"
+    
+    # Combine teks semua ayat
+    verse_text = "\n".join(v.text or "" for v in verse_objs)
     
     assets = Path(__file__).parent.parent / "assets"
     template_path = assets / "images" / "Teens_Verse_Template.png"
@@ -52,17 +75,29 @@ async def generate_verse_image(db: Session, book: str, chapter: int, verse: int,
     except (FileNotFoundError, OSError):
         regular_font = ImageFont.load_default()
     
-    title = f"{book_obj.name} {chapter}:{verse}"
+    # Draw title
     bbox = draw.textbbox((0, 0), title, font=bold_font)
     title_w = bbox[2] - bbox[0]
     title_h = bbox[3] - bbox[1]
     
-    verse_text = verse_obj.text or ""
+    x_title = img.width // 2 - title_w // 2
+    y_title = (img.height - 400) // 2
+    
+    draw.text((x_title, y_title), title, fill="black", font=bold_font)
+    
+    underline_y = y_title + title_h + 15
+    draw.line([(x_title, underline_y), (x_title + title_w, underline_y)], fill="black", width=4)
+    
+    # Draw verse text (multi-line)
     max_width = 610
-    words = verse_text.split()
+    words = verse_text.replace("\n", " \n ").split()
     lines = []
     current_line = ""
     for word in words:
+        if word == "\n":
+            lines.append(current_line)
+            current_line = ""
+            continue
         test_line = current_line + " " + word if current_line else word
         tw = draw.textbbox((0, 0), test_line, font=regular_font)[2]
         if tw <= max_width:
@@ -74,24 +109,8 @@ async def generate_verse_image(db: Session, book: str, chapter: int, verse: int,
         lines.append(current_line)
     
     line_spacing = regular_font.getbbox("A")[3] - regular_font.getbbox("A")[1] + 20
-    verse_h = len(lines) * line_spacing
     
-    title_box_h = title_h + 15 + 4 + 10
-    gap_between = 40
-    total_h = title_box_h + gap_between + verse_h
-    
-    start_y = (img.height - total_h) // 2
-    
-    x_title = img.width // 2 - title_w // 2
-    y_title = start_y
-    
-    draw.text((x_title, y_title), title, fill="black", font=bold_font)
-    
-    underline_y = y_title + title_h + 15
-    draw.line([(x_title, underline_y), (x_title + title_w, underline_y)], fill="black", width=4)
-    
-    y_verse = underline_y + 10 + gap_between
-    
+    y_verse = y_title + title_h + 60
     for line in lines:
         lw = draw.textbbox((0, 0), line, font=regular_font)[2]
         x_verse = img.width // 2 - lw // 2
