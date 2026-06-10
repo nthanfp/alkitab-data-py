@@ -45,6 +45,9 @@ htmlcov/
 *.db
 *.sqlite3
 
+# Output images
+output/
+
 # OS
 .DS_Store
 Thumbs.db
