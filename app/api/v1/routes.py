@@ -13,8 +13,10 @@ from app.schemas.scrape import ScrapeChapterRequest, ScrapeResponse
 from app.schemas.scrape_jobs import ScrapeJobList
 from app.schemas.search import VerseSearchResult, VerseSearchResults
 from app.schemas.verse_resolve import ResolveVerseRequest, ResolveVerseResponse
-from app.services.scraper import scrape_chapter
+from app.schemas.image_text import ImageTextRequest, ImageTextResponse
+from app.schemas.generate_image import GenerateImageRequest, GenerateImageResponse
 from app.services.verse_resolver import resolve_verse
+from app.services.image_service import generate_verse_image
 
 router = APIRouter()
 
@@ -161,3 +163,61 @@ async def resolve(req: ResolveVerseRequest, db: Session = Depends(get_db)):
     """
     results = await resolve_verse(req.text, db)
     return ResolveVerseResponse(query=req.text, results=results)
+
+
+@router.post("/image/add-text", response_model=ImageTextResponse, tags=["Image"], summary="Generate verse image")
+async def generate_image(req: ImageTextRequest, db: Session = Depends(get_db)):
+    """Generate verse image with title and verse text overlay.
+    
+    Example:
+    - book: "Yohanes", chapter: 3, verse: 16, output: "output/yohanes_3_16.png"
+    """
+    try:
+        output_path = await generate_verse_image(db, req.book, req.chapter, req.verse, req.output)
+        return ImageTextResponse(
+            status="ok",
+            message=f"Generated image for {req.book} {req.chapter}:{req.verse}",
+            output_path=output_path,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image generation failed: {e}")
+
+
+@router.post("/generate-verse-image", response_model=GenerateImageResponse, tags=["Image"], summary="Generate image from verse text")
+async def generate_verse_image_from_text(req: GenerateImageRequest, db: Session = Depends(get_db)):
+    """Resolve verse text and generate image in one endpoint.
+    
+    Example:
+    - text: "Yohanes 3:16 - Karena begitu besar kasih Allah..."
+    """
+    import hashlib
+    
+    try:
+        results = await resolve_verse(req.text, db)
+        if not results:
+            raise HTTPException(status_code=404, detail="Verse not found or could not be resolved")
+        
+        first_result = results[0]
+        book_name = first_result["book_name"]
+        chapter = first_result["chapter"]
+        verse = first_result["verse"]
+        
+        text_hash = hashlib.md5(req.text.encode()).hexdigest()[:8]
+        output_path = f"output/verse_{text_hash}.png"
+        
+        img_path = await generate_verse_image(db, book_name, chapter, verse, output_path)
+        
+        return GenerateImageResponse(
+            status="ok",
+            verse_reference=f"{book_name} {chapter}:{verse}",
+            book=book_name,
+            chapter=chapter,
+            verse=verse,
+            image_path=img_path,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image generation failed: {e}")

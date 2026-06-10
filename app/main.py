@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.routes import router as v1_router
 from app.core.config import settings
@@ -9,6 +11,8 @@ from app.core.config import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    output_dir = Path(__file__).parent.parent / "output"
+    output_dir.mkdir(exist_ok=True)
     yield
 
 
@@ -39,6 +43,10 @@ app.add_middleware(
 )
 
 app.include_router(v1_router, prefix=settings.API_V1_PREFIX)
+
+output_dir = Path(__file__).parent.parent / "output"
+output_dir.mkdir(exist_ok=True)
+app.mount("/output", StaticFiles(directory=output_dir), name="output")
 
 
 @app.get("/health", tags=["Health"])
