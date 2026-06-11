@@ -6,7 +6,8 @@ class ResolveResult(BaseModel):
     book_abbr: str
     book_name: str
     chapter: int
-    verse: int
+    start_verse: int
+    end_verse: int | None
     text: str | None
 
     model_config = {"from_attributes": True}

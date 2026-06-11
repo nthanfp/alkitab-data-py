@@ -203,7 +203,7 @@ async def generate_verse_image_from_text(req: GenerateImageRequest, db: Session 
         first_result = results[0]
         book_name = first_result["book_name"]
         chapter = first_result["chapter"]
-        verse = first_result["verse"]
+        start_verse = first_result["start_verse"]
         end_verse = first_result.get("end_verse")
         
         text_hash = hashlib.md5(req.text.encode()).hexdigest()[:8]
@@ -213,19 +213,19 @@ async def generate_verse_image_from_text(req: GenerateImageRequest, db: Session 
             db, 
             book_name, 
             chapter, 
-            verse, 
+            start_verse, 
             end_verse=end_verse,
             output_path=output_path
         )
         
-        verse_ref = f"{book_name} {chapter}:{verse}" + (f"-{end_verse}" if end_verse and end_verse > verse else "")
+        verse_ref = f"{book_name} {chapter}:{start_verse}" + (f"-{end_verse}" if end_verse and end_verse > start_verse else "")
         
         return GenerateImageResponse(
             status="ok",
             verse_reference=verse_ref,
             book=book_name,
             chapter=chapter,
-            verse=verse,
+            verse=start_verse,
             image_path=img_path,
         )
     except ValueError as e:

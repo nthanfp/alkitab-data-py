@@ -20,8 +20,7 @@ async def resolve_verse(text: str, db: Session) -> list[dict]:
             continue
 
         if end_verse and end_verse > verse_no:
-            # Range ayat - ambil dari ayat pertama
-            row = (
+            rows = (
                 db.query(Verse, Chapter, Book)
                 .select_from(Verse)
                 .join(Chapter, Verse.chapter_id == Chapter.id)
@@ -29,10 +28,24 @@ async def resolve_verse(text: str, db: Session) -> list[dict]:
                 .filter(
                     Book.name.ilike(book_name),
                     Chapter.chapter_no == chapter_no,
-                    Verse.verse_no == verse_no,
+                    Verse.verse_no >= verse_no,
+                    Verse.verse_no <= end_verse,
                 )
-                .first()
+                .order_by(Verse.verse_no)
+                .all()
             )
+            if rows:
+                v, ch, b = rows[0]
+                combined_text = "\n".join(r[0].text or "" for r in rows)
+                results.append({
+                    "book_id": b.id,
+                    "book_abbr": b.abbr,
+                    "book_name": b.name,
+                    "chapter": ch.chapter_no,
+                    "start_verse": verse_no,
+                    "end_verse": end_verse,
+                    "text": combined_text,
+                })
         else:
             row = (
                 db.query(Verse, Chapter, Book)
@@ -46,18 +59,17 @@ async def resolve_verse(text: str, db: Session) -> list[dict]:
                 )
                 .first()
             )
-
-        if row:
-            v, ch, b = row
-            results.append({
-                "book_id": b.id,
-                "book_abbr": b.abbr,
-                "book_name": b.name,
-                "chapter": ch.chapter_no,
-                "verse": v.verse_no,
-                "end_verse": end_verse if end_verse and end_verse > verse_no else None,
-                "text": v.text,
-            })
+            if row:
+                v, ch, b = row
+                results.append({
+                    "book_id": b.id,
+                    "book_abbr": b.abbr,
+                    "book_name": b.name,
+                    "chapter": ch.chapter_no,
+                    "start_verse": v.verse_no,
+                    "end_verse": None,
+                    "text": v.text,
+                })
 
     if not results:
         snippet = text[:80].strip()
