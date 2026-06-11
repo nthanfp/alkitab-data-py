@@ -1,23 +1,43 @@
+import json
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
-import re
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
 
 from app.api.v1.routes import router as v1_router
 from app.core.config import settings
 
 
-def sanitize_newlines(text: str) -> str:
-    """Replace actual newlines with \\n for JSON compatibility."""
-    if not text:
-        return text
-    # Replace \r\n and \n with escaped \\n
-    text = re.sub(r'\r\n', '\\n', text)
-    text = re.sub(r'\n', '\\n', text)
-    return text
+def sanitize_json_body(body: str) -> str:
+    """Replace literal newlines inside JSON string values with spaces."""
+    result = []
+    in_string = False
+    escape = False
+    for ch in body:
+        if escape:
+            result.append(ch)
+            escape = False
+            continue
+        if ch == '\\':
+            result.append(ch)
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            result.append(ch)
+            continue
+        if in_string and ch in ('\n', '\r'):
+            result.append(' ')
+            continue
+        result.append(ch)
+    return ''.join(result)
+
+
+SANITIZE_PATHS = {"/api/v1/resolve-verse", "/api/v1/generate-verse-image"}
 
 
 @asynccontextmanager
@@ -43,6 +63,21 @@ app = FastAPI(
         "url": "https://opensource.org/licenses/MIT",
     },
 )
+
+
+@app.middleware("http")
+async def sanitize_newline_middleware(request: Request, call_next):
+    if request.method == "POST" and request.url.path in SANITIZE_PATHS:
+        body = await request.body()
+        text = body.decode("utf-8")
+        sanitized = sanitize_json_body(text)
+        if sanitized != text:
+            async def receive():
+                return {"type": "http.request", "body": sanitized.encode("utf-8")}
+            request._receive = receive
+    response = await call_next(request)
+    return response
+
 
 app.add_middleware(
     CORSMiddleware,
