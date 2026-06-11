@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+import re
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,12 +10,21 @@ from app.api.v1.routes import router as v1_router
 from app.core.config import settings
 
 
+def sanitize_newlines(text: str) -> str:
+    """Replace actual newlines with \\n for JSON compatibility."""
+    if not text:
+        return text
+    # Replace \r\n and \n with escaped \\n
+    text = re.sub(r'\r\n', '\\n', text)
+    text = re.sub(r'\n', '\\n', text)
+    return text
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     output_dir = Path(__file__).parent.parent / "output"
     output_dir.mkdir(exist_ok=True)
     yield
-
 
 
 app = FastAPI(

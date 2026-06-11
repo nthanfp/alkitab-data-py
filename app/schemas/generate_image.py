@@ -1,8 +1,16 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class GenerateImageRequest(BaseModel):
     text: str
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def sanitize_text(cls, v: str) -> str:
+        if v:
+            v = v.replace("\r\n", " ").replace("\n", " ")
+            v = " ".join(v.split())
+        return v
 
 
 class GenerateImageResponse(BaseModel):
