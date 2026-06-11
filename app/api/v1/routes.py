@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -19,6 +19,30 @@ from app.services.verse_resolver import resolve_verse
 from app.services.image_service import generate_verse_image
 
 router = APIRouter()
+
+
+def _sanitize_json_body(body: str) -> str:
+    result = []
+    in_string = False
+    escape = False
+    for ch in body:
+        if escape:
+            result.append(ch)
+            escape = False
+            continue
+        if ch == '\\':
+            result.append(ch)
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            result.append(ch)
+            continue
+        if in_string and ch in ('\n', '\r'):
+            result.append(' ')
+            continue
+        result.append(ch)
+    return ''.join(result)
 
 
 @router.get("/ping", tags=["Health"])
@@ -154,15 +178,21 @@ async def scrape_all_book_chapters(book_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/resolve-verse", response_model=ResolveVerseResponse, tags=["Resolve"], summary="Resolve referensi ayat")
-async def resolve(req: ResolveVerseRequest, db: Session = Depends(get_db)):
+async def resolve(request: Request, db: Session = Depends(get_db)):
     """Resolve teks ayat ke referensi Alkitab (book, chapter, verse) menggunakan LLM BLIP-Text.
 
     Contoh input:
     - "Yesaya 54:10"
     - "Sebab biarpun gunung-gunung beranjak... Yesaya 54:10"
     """
-    results = await resolve_verse(req.text, db)
-    return ResolveVerseResponse(query=req.text, results=results)
+    import json
+    body = await request.body()
+    raw = body.decode("utf-8")
+    sanitized = _sanitize_json_body(raw)
+    data = json.loads(sanitized)
+    text = data.get("text", "")
+    results = await resolve_verse(text, db)
+    return ResolveVerseResponse(query=text, results=results)
 
 
 @router.post("/image/add-text", response_model=ImageTextResponse, tags=["Image"], summary="Generate verse image")
@@ -186,7 +216,7 @@ async def generate_image(req: ImageTextRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/generate-verse-image", response_model=GenerateImageResponse, tags=["Image"], summary="Generate image from verse text")
-async def generate_verse_image_from_text(req: GenerateImageRequest, db: Session = Depends(get_db)):
+async def generate_verse_image_from_text(request: Request, db: Session = Depends(get_db)):
     """Resolve verse text and generate image in one endpoint.
     
     Example:
@@ -194,9 +224,19 @@ async def generate_verse_image_from_text(req: GenerateImageRequest, db: Session 
     - text: "Yohanes 8:31-32"
     """
     import hashlib
+    import json
     
     try:
-        results = await resolve_verse(req.text, db)
+        body = await request.body()
+        raw = body.decode("utf-8")
+        sanitized = _sanitize_json_body(raw)
+        data = json.loads(sanitized)
+        text = data.get("text", "")
+        
+        if not text:
+            raise HTTPException(status_code=400, detail="text field is required")
+        
+        results = await resolve_verse(text, db)
         if not results:
             raise HTTPException(status_code=404, detail="Verse not found or could not be resolved")
         
@@ -206,7 +246,7 @@ async def generate_verse_image_from_text(req: GenerateImageRequest, db: Session 
         start_verse = first_result["start_verse"]
         end_verse = first_result.get("end_verse")
         
-        text_hash = hashlib.md5(req.text.encode()).hexdigest()[:8]
+        text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
         output_path = f"output/verse_{text_hash}.png"
         
         img_path = await generate_verse_image(
