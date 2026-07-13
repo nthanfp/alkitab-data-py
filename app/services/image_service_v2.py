@@ -89,7 +89,7 @@ async def generate_verse_image_v2(
     zone_top = 670
     zone_bottom = 1440
     zone_height = zone_bottom - zone_top
-    title_gap = 30
+    title_gap = 80
 
     # Word wrap
     max_width = img.width - 145 - 100
