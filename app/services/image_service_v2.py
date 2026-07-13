@@ -114,15 +114,10 @@ async def generate_verse_image_v2(
         lines.append(current_line)
 
     line_spacing = int(46 * 1.87)
-    letter_spacing = -50
     x_verse = 145
     y_verse = 870
     for line in lines:
-        cur_x = x_verse
-        for ch in line:
-            draw.text((cur_x, y_verse), ch, fill=color, font=verse_font)
-            ch_w = draw.textbbox((0, 0), ch, font=verse_font)[2]
-            cur_x += ch_w + letter_spacing
+        draw.text((x_verse, y_verse), line, fill=color, font=verse_font)
         y_verse += line_spacing
 
     img.save(output_file)
