@@ -80,7 +80,7 @@ async def generate_verse_image_v2(
         title_font = ImageFont.load_default()
 
     try:
-        verse_font = ImageFont.truetype(str(regular_font_path), 46)
+        verse_font = ImageFont.truetype(str(regular_font_path), 42)
     except (FileNotFoundError, OSError):
         verse_font = ImageFont.load_default()
 
@@ -113,7 +113,7 @@ async def generate_verse_image_v2(
     if current_line:
         lines.append(current_line)
 
-    line_spacing = int(46 * 1.87)
+    line_spacing = int(42 * 1.3)
     x_verse = 145
     y_verse = 870
     for line in lines:
