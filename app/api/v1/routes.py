@@ -17,6 +17,7 @@ from app.schemas.image_text import ImageTextRequest, ImageTextResponse
 from app.schemas.generate_image import GenerateImageRequest, GenerateImageResponse
 from app.services.verse_resolver import resolve_verse
 from app.services.image_service import generate_verse_image
+from app.services.image_service_v2 import generate_verse_image_v2
 
 router = APIRouter()
 
@@ -153,61 +154,61 @@ async def scrape_single_chapter(req: ScrapeChapterRequest, db: Session = Depends
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Scrape failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Image generation failed: {e}")
 
 
-@router.post("/scrape/book/{book_id}", response_model=ScrapeResponse, tags=["Scrape"], summary="Scrape seluruh pasal")
-async def scrape_all_book_chapters(book_id: int, db: Session = Depends(get_db)):
-    """Scrape semua pasal dalam kitab."""
-    book = db.query(Book).filter(Book.id == book_id).first()
-    if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
-
-    scraped = 0
-    for ch in range(1, book.chapter_count + 1):
-        try:
-            await scrape_chapter(db, book.abbr, ch)
-            scraped += 1
-        except Exception:
-            continue
-
-    return ScrapeResponse(
-        status="ok",
-        message=f"Scraped {book.name} ({scraped}/{book.chapter_count} chapters)",
-    )
-
-
-@router.post("/resolve-verse", response_model=ResolveVerseResponse, tags=["Resolve"], summary="Resolve referensi ayat")
-async def resolve(request: Request, db: Session = Depends(get_db)):
-    """Resolve teks ayat ke referensi Alkitab (book, chapter, verse) menggunakan LLM BLIP-Text.
-
-    Contoh input:
-    - "Yesaya 54:10"
-    - "Sebab biarpun gunung-gunung beranjak... Yesaya 54:10"
-    """
-    import json
-    body = await request.body()
-    raw = body.decode("utf-8")
-    sanitized = _sanitize_json_body(raw)
-    data = json.loads(sanitized)
-    text = data.get("text", "")
-    results = await resolve_verse(text, db)
-    return ResolveVerseResponse(query=text, results=results)
-
-
-@router.post("/image/add-text", response_model=ImageTextResponse, tags=["Image"], summary="Generate verse image")
-async def generate_image(req: ImageTextRequest, db: Session = Depends(get_db)):
-    """Generate verse image with title and verse text overlay.
+@router.post("/generate-verse-image-v2", response_model=GenerateImageResponse, tags=["Image"], summary="Generate image V2 template")
+async def generate_verse_image_v2_endpoint(request: Request, db: Session = Depends(get_db)):
+    """Resolve verse text and generate image using V2 template (Montserrat, #373e12, left-aligned).
     
     Example:
-    - book: "Yohanes", chapter: 3, verse: 16, output: "output/yohanes_3_16.png"
+    - text: "Yohanes 3:16"
+    - text: "Yohanes 8:31-32"
     """
+    import hashlib
+    import json
+
     try:
-        output_path = await generate_verse_image(db, req.book, req.chapter, req.verse, req.output)
-        return ImageTextResponse(
-            status="ok",
-            message=f"Generated image for {req.book} {req.chapter}:{req.verse}",
+        body = await request.body()
+        raw = body.decode("utf-8")
+        sanitized = _sanitize_json_body(raw)
+        data = json.loads(sanitized)
+        text = data.get("text", "")
+
+        if not text:
+            raise HTTPException(status_code=400, detail="text field is required")
+
+        results = await resolve_verse(text, db)
+        if not results:
+            raise HTTPException(status_code=404, detail="Verse not found or could not be resolved")
+
+        first_result = results[0]
+        book_name = first_result["book_name"]
+        chapter = first_result["chapter"]
+        start_verse = first_result["start_verse"]
+        end_verse = first_result.get("end_verse")
+
+        text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
+        output_path = f"output/verse_v2_{text_hash}.png"
+
+        img_path = await generate_verse_image_v2(
+            db,
+            book_name,
+            chapter,
+            start_verse,
+            end_verse=end_verse,
             output_path=output_path,
+        )
+
+        verse_ref = f"{book_name} {chapter}:{start_verse}" + (f"-{end_verse}" if end_verse and end_verse > start_verse else "")
+
+        return GenerateImageResponse(
+            status="ok",
+            verse_reference=verse_ref,
+            book=book_name,
+            chapter=chapter,
+            verse=start_verse,
+            image_path=img_path,
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
