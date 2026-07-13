@@ -85,16 +85,14 @@ async def generate_verse_image_v2(
         verse_font = ImageFont.load_default()
 
     color = "#373e12"
+    x = 145
+    zone_top = 670
+    zone_bottom = 1440
+    zone_height = zone_bottom - zone_top
+    title_gap = 30
 
-    # Draw title — x=145, y=770, align left, vertical middle
-    title_bbox = draw.textbbox((0, 0), title, font=title_font)
-    title_h = title_bbox[3] - title_bbox[1]
-    x_title = 145
-    y_title = 770 - title_h // 2
-    draw.text((x_title, y_title), title, fill=color, font=title_font)
-
-    # Draw verse — x=145, y=870, align left, top, extends downward
-    max_width = img.width - 145 - 100  # 100px right margin
+    # Word wrap
+    max_width = img.width - 145 - 100
     words = verse_text.replace("\n", " \n ").split()
     lines = []
     current_line = ""
@@ -113,11 +111,25 @@ async def generate_verse_image_v2(
     if current_line:
         lines.append(current_line)
 
+    # Hitung total height
+    title_bbox = draw.textbbox((0, 0), title, font=title_font)
+    title_h = title_bbox[3] - title_bbox[1]
+
     line_spacing = int(42 * 1.3)
-    x_verse = 145
-    y_verse = 870
+    verse_h = len(lines) * line_spacing
+
+    total_h = title_h + title_gap + verse_h
+
+    # Vertical center dalam zone 670-1440
+    start_y = zone_top + (zone_height - total_h) // 2
+
+    # Draw title
+    draw.text((x, start_y), title, fill=color, font=title_font)
+
+    # Draw verse
+    y_verse = start_y + title_h + title_gap
     for line in lines:
-        draw.text((x_verse, y_verse), line, fill=color, font=verse_font)
+        draw.text((x, y_verse), line, fill=color, font=verse_font)
         y_verse += line_spacing
 
     img.save(output_file)
