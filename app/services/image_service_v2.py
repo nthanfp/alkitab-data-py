@@ -71,15 +71,16 @@ async def generate_verse_image_v2(
     img = Image.open(template_path).convert("RGB")
     draw = ImageDraw.Draw(img, "RGBA")
 
-    # Load font Montserrat-Bold
-    font_path = FONTS / "Montserrat-Bold.ttf"
+    # Load fonts
+    bold_font_path = FONTS / "Montserrat-Bold.ttf"
+    regular_font_path = FONTS / "Montserrat-Regular.ttf"
     try:
-        title_font = ImageFont.truetype(str(font_path), 36)
+        title_font = ImageFont.truetype(str(bold_font_path), 48)
     except (FileNotFoundError, OSError):
         title_font = ImageFont.load_default()
 
     try:
-        verse_font = ImageFont.truetype(str(font_path), 28)
+        verse_font = ImageFont.truetype(str(regular_font_path), 36)
     except (FileNotFoundError, OSError):
         verse_font = ImageFont.load_default()
 
