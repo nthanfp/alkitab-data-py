@@ -75,12 +75,12 @@ async def generate_verse_image_v2(
     bold_font_path = FONTS / "Montserrat-Bold.ttf"
     regular_font_path = FONTS / "Montserrat-Regular.ttf"
     try:
-        title_font = ImageFont.truetype(str(bold_font_path), 48)
+        title_font = ImageFont.truetype(str(bold_font_path), 64)
     except (FileNotFoundError, OSError):
         title_font = ImageFont.load_default()
 
     try:
-        verse_font = ImageFont.truetype(str(regular_font_path), 36)
+        verse_font = ImageFont.truetype(str(regular_font_path), 46)
     except (FileNotFoundError, OSError):
         verse_font = ImageFont.load_default()
 
@@ -113,11 +113,16 @@ async def generate_verse_image_v2(
     if current_line:
         lines.append(current_line)
 
-    line_spacing = 40
+    line_spacing = int(46 * 1.87)
+    letter_spacing = -50
     x_verse = 145
     y_verse = 870
     for line in lines:
-        draw.text((x_verse, y_verse), line, fill=color, font=verse_font)
+        cur_x = x_verse
+        for ch in line:
+            draw.text((cur_x, y_verse), ch, fill=color, font=verse_font)
+            ch_w = draw.textbbox((0, 0), ch, font=verse_font)[2]
+            cur_x += ch_w + letter_spacing
         y_verse += line_spacing
 
     img.save(output_file)
