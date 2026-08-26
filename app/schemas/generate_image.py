@@ -20,3 +20,4 @@ class GenerateImageResponse(BaseModel):
     chapter: int
     verse: int
     image_path: str
+    template_used: str | None = None

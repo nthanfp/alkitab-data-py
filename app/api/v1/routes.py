@@ -273,3 +273,69 @@ async def generate_verse_image_from_text(request: Request, db: Session = Depends
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Image generation failed: {e}")
+
+
+@router.post("/generate-verse-image-auto", response_model=GenerateImageResponse, tags=["Image"], summary="Auto template: V1 (ganjil) / V2 (genap)")
+async def generate_verse_image_auto(request: Request, db: Session = Depends(get_db)):
+    """Auto-select template based on current date.
+    Odd day → V1 template, Even day → V2 template.
+    """
+    from datetime import datetime
+    import hashlib
+    import json
+
+    try:
+        body = await request.body()
+        raw = body.decode("utf-8")
+        sanitized = _sanitize_json_body(raw)
+        data = json.loads(sanitized)
+        text = data.get("text", "")
+
+        if not text:
+            raise HTTPException(status_code=400, detail="text field is required")
+
+        results = await resolve_verse(text, db)
+        if not results:
+            raise HTTPException(status_code=404, detail="Verse not found or could not be resolved")
+
+        first_result = results[0]
+        book_name = first_result["book_name"]
+        chapter = first_result["chapter"]
+        start_verse = first_result["start_verse"]
+        end_verse = first_result.get("end_verse")
+
+        today = datetime.now().day
+        use_v2 = today % 2 == 0
+
+        if use_v2:
+            text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
+            output_path = f"output/verse_v2_{text_hash}.png"
+            img_path = await generate_verse_image_v2(
+                db, book_name, chapter, start_verse,
+                end_verse=end_verse, output_path=output_path,
+            )
+            template_used = "v2"
+        else:
+            text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
+            output_path = f"output/verse_{text_hash}.png"
+            img_path = await generate_verse_image(
+                db, book_name, chapter, start_verse,
+                end_verse=end_verse, output_path=output_path,
+            )
+            template_used = "v1"
+
+        verse_ref = f"{book_name} {chapter}:{start_verse}" + (f"-{end_verse}" if end_verse and end_verse > start_verse else "")
+
+        return GenerateImageResponse(
+            status="ok",
+            verse_reference=verse_ref,
+            book=book_name,
+            chapter=chapter,
+            verse=start_verse,
+            image_path=img_path,
+            template_used=template_used,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image generation failed: {e}")
